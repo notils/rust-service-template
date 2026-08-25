@@ -1,9 +1,9 @@
 //! Server assembly: middleware, binding, and graceful shutdown.
 
-use axum::{http::StatusCode, Router};
+use axum::{Router, http::StatusCode};
 use tokio::net::TcpListener;
 use tower_http::{
-    request_id::MakeRequestUuid, timeout::TimeoutLayer, trace::TraceLayer, ServiceBuilderExt,
+    ServiceBuilderExt, request_id::MakeRequestUuid, timeout::TimeoutLayer, trace::TraceLayer,
 };
 
 use crate::{config::Config, routes, state::AppState};

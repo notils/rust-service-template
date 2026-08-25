@@ -7,7 +7,7 @@
 
 use axum::{
     extract::{FromRequestParts, Request},
-    http::{header::HeaderName, request::Parts, HeaderMap},
+    http::{HeaderMap, header::HeaderName, request::Parts},
     middleware::Next,
     response::Response,
 };

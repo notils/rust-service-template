@@ -12,6 +12,17 @@
 
 ## Quick start
 
+Run this once, right after generating, before your first commit:
+
+```bash
+cargo fmt --all
+```
+
+🔴 Not optional cleanup — rustfmt's import order and line-wrapping depend on
+your project name's exact length and alphabetical position (e.g. whether it
+sorts before or after `sea_orm`), so the freshly generated files will not
+already match what `cargo fmt --check` demands in CI. This is a one-time fix.
+
 ```bash
 cp .env.example .env
 docker compose up -d postgres
