@@ -13,7 +13,3 @@ uuid.workspace = true
 chrono = { version = "0.4.42", default-features = false, features = ["clock"] }
 serde_json.workspace = true
 thiserror.workspace = true
-
-[dev-dependencies]
-tokio.workspace = true
-dotenvy.workspace = true
