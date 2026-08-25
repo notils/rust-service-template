@@ -1,27 +1,33 @@
 # `cargo audit` configuration.
 #
 # 🔴 Every entry below must be a deliberate, reviewed decision with a reason and
-# a removal condition — never add one merely to make CI green. Nothing is
-# ignored here yet; this file exists so the first real advisory has a place to
-# go with the right shape from day one.
+# a removal condition — never add one merely to make CI green. Re-check every
+# entry on every dependency bump: `cargo audit` without the ignores shows
+# whether one can go.
 #
-# When you do add one, follow this pattern (from notils-praman):
-#
-#   [advisories]
-#   ignore = [
-#     # RUSTSEC-YYYY-NNNN — one-line description of the vulnerability.
-#     #
-#     # Why the vulnerable code path is actually unreachable here — be specific
-#     # about which feature/dependency pulls it in and why this service never
-#     # calls it.
-#     #
-#     # What has to change upstream (a fixed version, a dependency bump) before
-#     # this entry can be removed.
-#     "RUSTSEC-YYYY-NNNN",
-#   ]
-#
-# Re-check every entry on every dependency bump: `cargo audit` without the
-# ignores shows whether one can go.
+# The two below aren't optional extras — they come from this template's own
+# dependency choices (sea-orm + sqlx-postgres, utoipa-axum) and will fire on
+# the very first `cargo audit` run of any project generated from it.
 
 [advisories]
-ignore = []
+ignore = [
+  # RUSTSEC-2026-0235 — out-of-bounds read in `rkyv` archive validation.
+  #
+  # Arrives via `rust_decimal`, a non-optional dependency of `sqlx-postgres`
+  # (Postgres NUMERIC support). Remove this entry once your schema actually
+  # has a decimal column and you deserialize an rkyv archive somewhere — at
+  # that point re-evaluate for real rather than keeping this ignore.
+  #
+  # Fixed in rkyv >= 0.8.17, which `rust_decimal` does not yet allow.
+  "RUSTSEC-2026-0235",
+
+  # RUSTSEC-2024-0436 — `paste` is unmaintained. Not a vulnerability report.
+  #
+  # Reached only through `utoipa-axum`'s `routes!` macro (see docs/development.md
+  # § API docs), which uses it to generate identifiers at your own build time.
+  # `paste` ships no runtime component and never touches request data or any
+  # untrusted input — there is nothing for "unmaintained" to expose here.
+  #
+  # Remove this entry once utoipa-axum drops `paste` or a maintained fork.
+  "RUSTSEC-2024-0436",
+]
