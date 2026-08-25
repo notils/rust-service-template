@@ -13,29 +13,42 @@
 //! );
 //! ```
 
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-
 /// Declares a UUID newtype with the same small surface for each id kind.
+///
+/// Every path inside is fully qualified (`::uuid::Uuid`, `::serde::Serialize`)
+/// rather than relying on a `use` at the call site — this macro is
+/// `#[macro_export]`ed, so it must be self-contained: it may expand in a
+/// crate that never imported `serde` or `uuid` under those names.
 #[macro_export]
 macro_rules! uuid_newtype {
     ($(#[$meta:meta])* $name:ident) => {
         $(#[$meta])*
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+        #[derive(
+            Debug,
+            Clone,
+            Copy,
+            PartialEq,
+            Eq,
+            Hash,
+            PartialOrd,
+            Ord,
+            ::serde::Serialize,
+            ::serde::Deserialize,
+        )]
         #[serde(transparent)]
-        pub struct $name(Uuid);
+        pub struct $name(::uuid::Uuid);
 
         impl $name {
             /// Generates a fresh time-sortable id.
             pub fn new() -> Self {
-                Self(Uuid::now_v7())
+                Self(::uuid::Uuid::now_v7())
             }
 
-            pub const fn from_uuid(id: Uuid) -> Self {
+            pub const fn from_uuid(id: ::uuid::Uuid) -> Self {
                 Self(id)
             }
 
-            pub const fn as_uuid(&self) -> Uuid {
+            pub const fn as_uuid(&self) -> ::uuid::Uuid {
                 self.0
             }
         }
@@ -46,13 +59,13 @@ macro_rules! uuid_newtype {
             }
         }
 
-        impl From<Uuid> for $name {
-            fn from(id: Uuid) -> Self {
+        impl From<::uuid::Uuid> for $name {
+            fn from(id: ::uuid::Uuid) -> Self {
                 Self(id)
             }
         }
 
-        impl From<$name> for Uuid {
+        impl From<$name> for ::uuid::Uuid {
             fn from(id: $name) -> Self {
                 id.0
             }
@@ -65,10 +78,10 @@ macro_rules! uuid_newtype {
         }
 
         impl std::str::FromStr for $name {
-            type Err = uuid::Error;
+            type Err = ::uuid::Error;
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
-                Ok(Self(Uuid::parse_str(s)?))
+                Ok(Self(::uuid::Uuid::parse_str(s)?))
             }
         }
     };
