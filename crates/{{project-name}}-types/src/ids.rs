@@ -135,8 +135,6 @@ pub use string_newtype;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     uuid_newtype!(
         /// Exists only to exercise the macro in tests — delete once you've
         /// declared your own real ids and this file's only job is the macros.
