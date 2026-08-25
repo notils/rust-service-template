@@ -1,0 +1,19 @@
+[package]
+name = "{{project-name}}-db"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+{{project-name}}-core.workspace = true
+{{project-name}}-types.workspace = true
+sea-orm.workspace = true
+uuid.workspace = true
+chrono = { version = "0.4.42", default-features = false, features = ["clock"] }
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+dotenvy.workspace = true

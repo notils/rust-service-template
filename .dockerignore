@@ -1,0 +1,32 @@
+# Keeps the build context small and, more importantly, keeps secrets out of it.
+# Anything sent to the daemon can end up in an image layer.
+
+# 🔴 Never in an image. `.gitignore` covers git; this covers Docker, and the two
+# are enforced separately — a file can be gitignored and still be COPY'd in.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p8
+
+# Multiple gigabytes, and host-built artifacts are useless in a Linux image
+# anyway — the builder stage compiles from scratch.
+target/
+
+# Not needed to build, and `.git` alone is often larger than the source.
+.git/
+.gitignore
+.github/
+.vscode/
+
+# Local infrastructure, not part of the image.
+docker-compose.yml
+docs/
+README.md
+*.md
+
+# Editor and OS noise.
+.DS_Store
+Thumbs.db
+*.swp

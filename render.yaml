@@ -1,0 +1,116 @@
+# Render blueprint. Applying this creates or updates staging.
+#
+# Only `{{project-name}}-staging` is active — production is commented out
+# below until a real reason to deploy production exists (see
+# docs/deployment.md § Platform choice, ported from notils-praman). When it's
+# uncommented, keep its secrets separate from staging's, and update its
+# `image.url` to point at `:latest`/`main` once that branch exists.
+#
+# `plan: free`, deliberately: this avoids Render's payment-info requirement
+# for Blueprint services (only paid instance types trigger it) while the
+# service is being validated pre-launch. Revisit before real traffic: free
+# instances spin down after 15 min idle, so the first request after a quiet
+# period pays a cold-start penalty this service's users would feel.
+
+services:
+  # ── Production ────────────────────────────────────────────────────────────
+  # Commented out until there's a `main` branch and an actual reason to
+  # deploy production. Uncomment once both exist; keep its secrets separate
+  # from staging's when you do.
+  #
+  # - type: web
+  #   name: {{project-name}}
+  #   runtime: image
+  #   plan: free
+  #   region: singapore # Pick whatever's closest to your users.
+  #   image:
+  #     url: ghcr.io/REPLACE_WITH_ORG/{{project-name}}:latest
+  #     # If the repo is private, its GHCR package is private too — see
+  #     # docs/deployment.md for how to create this credential (Render
+  #     # Workspace Settings → Credentials) and reference it by the Name you
+  #     # gave it there.
+  #     creds:
+  #       fromRegistryCreds:
+  #         name: REPLACE_WITH_CREDENTIAL_NAME
+  #
+  #   # 🔴 `preDeployCommand` is NOT set — Render's free tier does not support
+  #   # it (paid tiers do). Until this upgrades off `plan: free`, migrations
+  #   # must be applied manually before each deploy that needs them: see
+  #   # docs/deployment.md § Migrations on the free tier.
+  #
+  #   # Liveness, never /health/ready. A readiness probe here would let a
+  #   # brief database blip restart otherwise-healthy instances.
+  #   healthCheckPath: /health
+  #
+  #   domains:
+  #     - REPLACE_WITH_PRODUCTION_DOMAIN
+  #
+  #   envVars:
+  #     - key: PORT
+  #       value: 8080
+  #     - key: HOST
+  #       value: 0.0.0.0
+  #     - key: LOG_FORMAT
+  #       value: json
+  #     - key: RUST_LOG
+  #       value: info,{{crate_name}}_api=info,{{crate_name}}_db=info
+  #
+  #     # Pool size is per instance: raising this multiplies by the instance
+  #     # count against the Postgres connection ceiling.
+  #     - key: DATABASE_MAX_CONNECTIONS
+  #       value: 10
+  #     # 🔴 Must stay false. Statements can carry personal data into logs.
+  #     - key: DATABASE_LOG_STATEMENTS
+  #       value: "false"
+  #
+  #     # Set in the dashboard, never in git.
+  #     - key: DATABASE_URL
+  #       sync: false
+
+  # ── Staging ───────────────────────────────────────────────────────────────
+  # The only environment deployed by default — see the note above.
+  - type: web
+    name: {{project-name}}-staging
+    runtime: image
+    plan: free
+    region: singapore # Pick whatever's closest to your users.
+    image:
+      url: ghcr.io/REPLACE_WITH_ORG/{{project-name}}:dev
+      # If the repo is private, its GHCR package is private too — see
+      # docs/deployment.md for how to create this credential (Render
+      # Workspace Settings → Credentials) and reference it by the Name you
+      # gave it there.
+      creds:
+        fromRegistryCreds:
+          name: REPLACE_WITH_CREDENTIAL_NAME
+
+    # 🔴 `preDeployCommand` is NOT set — Render's free tier does not support it
+    # (paid tiers do). Until this upgrades off `plan: free`, migrations must be
+    # applied manually before each deploy that needs them: see
+    # docs/deployment.md § Migrations on the free tier.
+
+    # Liveness, never /health/ready. A readiness probe here would let a brief
+    # database blip restart otherwise-healthy instances.
+    healthCheckPath: /health
+
+    domains:
+      - REPLACE_WITH_STAGING_DOMAIN
+
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: HOST
+        value: 0.0.0.0
+      - key: LOG_FORMAT
+        value: json
+      # Verbose in staging: this is where a problem should be diagnosable.
+      - key: RUST_LOG
+        value: info,{{crate_name}}_api=debug,{{crate_name}}_db=debug
+      - key: DATABASE_MAX_CONNECTIONS
+        value: 5
+      - key: DATABASE_LOG_STATEMENTS
+        value: "false"
+
+      # Set in the dashboard, never in git.
+      - key: DATABASE_URL
+        sync: false

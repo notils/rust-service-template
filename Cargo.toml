@@ -1,0 +1,45 @@
+[workspace]
+members = ["crates/*"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+authors = ["{{authors}}"]
+license = "MIT"
+
+# Single source of truth for versions. Member crates use `workspace = true`,
+# so a bump here applies everywhere and versions can never drift apart.
+[workspace.dependencies]
+{{project-name}}-types = { path = "crates/{{project-name}}-types" }
+{{project-name}}-core = { path = "crates/{{project-name}}-core" }
+{{project-name}}-db = { path = "crates/{{project-name}}-db" }
+{{project-name}}-migration = { path = "crates/{{project-name}}-migration" }
+
+async-trait = "0.1.89"
+axum = "0.8.9"
+dotenvy = "0.15.7"
+sea-orm = { version = "2.0.2", default-features = false, features = ["runtime-tokio", "sqlx-postgres", "macros", "with-uuid", "with-chrono", "with-json"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.151"
+thiserror = "2.0.17"
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "net", "signal"] }
+tower = "0.5.2"
+tower-http = { version = "0.6.6", features = ["trace", "request-id", "timeout", "util"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json"] }
+uuid = { version = "1.18.1", features = ["v7", "serde"] }
+serde_path_to_error = "0.1.20"
+validator = { version = "0.21.0", features = ["derive"] }
+utoipa = { version = "5.5.0", features = ["axum_extras"] }
+utoipa-axum = "0.2.0"
+# `vendored`: bundles the Swagger UI assets into the crate's own crates.io
+# package instead of downloading them at build time. Without it, the build
+# shells out to `curl` — which a minimal Docker builder image deliberately
+# doesn't have — and fails offline anyway.
+utoipa-swagger-ui = { version = "9.0.2", features = ["axum", "vendored"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"

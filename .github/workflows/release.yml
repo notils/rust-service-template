@@ -1,0 +1,75 @@
+name: Publish image
+
+on:
+  push:
+    branches: [main, dev]
+    tags: ['v*']
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE: ${{ github.repository }}
+
+jobs:
+  publish:
+    name: Build and push to GHCR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Required to push to GHCR with the built-in token — no PAT needed.
+      packages: write
+      # Lets the attestation step sign the image provenance.
+      id-token: write
+      attestations: write
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # `dev` → :dev (staging pulls this), `main` → :latest, a tag → :vX.Y.Z.
+      # Every build also gets an immutable :sha- tag, which is what makes a
+      # rollback a specific digest rather than a guess about what `latest` was.
+      - name: Derive tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=dev,enable=${{ github.ref == 'refs/heads/dev' }}
+            type=semver,pattern={{version}}
+            type=sha,prefix=sha-
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Records what built this image, so a deployed digest can be traced back
+      # to a commit. Cheap to add now; awkward to reconstruct after an incident.
+      #
+      # ⚠️ Not fatal: GitHub's attestation API rejects this for a private repo
+      # on some org plans ("upgrade billing, or make the repository public").
+      # The image is already pushed by the previous step regardless — losing
+      # provenance metadata must not fail the whole publish. Revisit
+      # continue-on-error if the repo goes public or the org plan changes.
+      - name: Attest provenance
+        continue-on-error: true
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true

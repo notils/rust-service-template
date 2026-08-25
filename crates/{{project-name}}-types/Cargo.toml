@@ -1,0 +1,17 @@
+[package]
+name = "{{project-name}}-types"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+# Deliberately minimal: serialization + error derives only.
+# No I/O crates here, ever — every other crate depends on this one.
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+validator.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

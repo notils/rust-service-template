@@ -1,0 +1,19 @@
+[package]
+name = "{{project-name}}-migration"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+name = "{{crate_name}}_migration"
+path = "src/lib.rs"
+
+# Migrations are Rust, compiled with the project: one that does not compile
+# fails at build time rather than at deploy time.
+[dependencies]
+sea-orm-migration = { version = "2.0.2", features = ["runtime-tokio-rustls", "sqlx-postgres"] }
+tokio.workspace = true
+dotenvy.workspace = true
+async-trait.workspace = true

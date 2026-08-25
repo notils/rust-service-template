@@ -1,0 +1,27 @@
+# `cargo audit` configuration.
+#
+# 🔴 Every entry below must be a deliberate, reviewed decision with a reason and
+# a removal condition — never add one merely to make CI green. Nothing is
+# ignored here yet; this file exists so the first real advisory has a place to
+# go with the right shape from day one.
+#
+# When you do add one, follow this pattern (from notils-praman):
+#
+#   [advisories]
+#   ignore = [
+#     # RUSTSEC-YYYY-NNNN — one-line description of the vulnerability.
+#     #
+#     # Why the vulnerable code path is actually unreachable here — be specific
+#     # about which feature/dependency pulls it in and why this service never
+#     # calls it.
+#     #
+#     # What has to change upstream (a fixed version, a dependency bump) before
+#     # this entry can be removed.
+#     "RUSTSEC-YYYY-NNNN",
+#   ]
+#
+# Re-check every entry on every dependency bump: `cargo audit` without the
+# ignores shows whether one can go.
+
+[advisories]
+ignore = []

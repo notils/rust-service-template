@@ -1,0 +1,20 @@
+[package]
+name = "{{project-name}}-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+# 🔴 NO I/O DEPENDENCIES. No sea-orm, reqwest, or tokio::net (docs/development.md).
+# Domain logic that cannot reach the network or a database is unit-testable
+# without fixtures, which is how the important paths stay correct as this
+# grows. Add crates here freely — just never one that touches the network,
+# a filesystem, or a database; that belongs in `{{project-name}}-db` or
+# `{{project-name}}-api` instead. CI's `no-io-in-core` job enforces this
+# mechanically, not just by convention.
+[dependencies]
+{{project-name}}-types.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

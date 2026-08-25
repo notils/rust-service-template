@@ -1,0 +1,16 @@
+# cargo-generate config. See docs/development.md in the generated project for
+# what this template actually contains.
+
+[template]
+cargo_generate_version = ">=0.20.0"
+
+# GitHub Actions' own `${{ }}` expression syntax collides with Liquid's `{{ }}`
+# templating syntax — cargo-generate would try to substitute `${{ github.sha }}`
+# as if it were a placeholder and corrupt the workflow file. Excluding these
+# from Liquid processing and fixing up their handful of real substitutions
+# (project/crate name) via the post hook below sidesteps the collision
+# entirely, rather than wrapping every Actions expression in `{% raw %}`.
+exclude = [".github/workflows/*.yml"]
+
+[hooks]
+post = ["hooks/post.rhai"]

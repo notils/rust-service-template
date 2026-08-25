@@ -1,0 +1,206 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+# A new push supersedes an in-flight run on the same ref. Saves runner minutes
+# without ever cancelling a run on a protected branch mid-merge.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  # Debug symbols are dead weight in CI: nothing here opens a debugger, and the
+  # cache stays much smaller.
+  CARGO_PROFILE_DEV_DEBUG: 0
+  RUST_BACKTRACE: 1
+
+jobs:
+  # ── Fast feedback: no database needed, so it fails in under a minute ───────
+  check:
+    name: Format, lint, and unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      # `-D warnings`: a warning is a failure, so they cannot accumulate until
+      # nobody reads the output any more.
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      # __PROJECT_NAME__-core has no I/O dependencies, so its tests need no
+      # services. Running them separately means a domain-logic regression is
+      # reported without waiting for Postgres to spin up.
+      - name: Unit tests (no database)
+        run: cargo test -p __PROJECT_NAME__-core -p __PROJECT_NAME__-types
+
+  # ── Enforces the architectural rule rather than trusting it ───────────────
+  no-io-in-core:
+    name: __PROJECT_NAME__-core has no I/O dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      # docs/architecture.md forbids sea-orm, reqwest, and tokio in the core
+      # crate. Comments do not enforce that; this does. The rule is what keeps
+      # domain logic testable without fixtures.
+      - name: Assert no I/O crates reach __PROJECT_NAME__-core
+        run: |
+          tree=$(cargo tree -p __PROJECT_NAME__-core -e normal)
+          echo "$tree"
+          for crate in sea-orm reqwest hyper axum sqlx; do
+            if echo "$tree" | grep -qE "^[^a-z]*${crate} v"; then
+              echo "::error::__PROJECT_NAME__-core must not depend on ${crate}"
+              exit 1
+            fi
+          done
+          # tokio needs an anchored match: `tokio` appears inside names like
+          # `tokio-util`, which are not the runtime itself.
+          if echo "$tree" | grep -qE "^[^a-z]*tokio v"; then
+            echo "::error::__PROJECT_NAME__-core must not depend on tokio"
+            exit 1
+          fi
+          echo "__PROJECT_NAME__-core is I/O-free"
+
+  test:
+    name: Full test suite
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: __CRATE_NAME__
+          POSTGRES_PASSWORD: ci-only-not-a-secret
+          POSTGRES_DB: __CRATE_NAME___test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U __CRATE_NAME__ -d __CRATE_NAME___test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://__CRATE_NAME__:ci-only-not-a-secret@localhost:5432/__CRATE_NAME___test
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      # Proves migrations apply to an empty database — the thing that breaks a
+      # deploy, and which testing against a long-lived dev database hides.
+      - name: Apply migrations
+        run: cargo run -p __PROJECT_NAME__-migration -- up
+
+      # 🔴 Verifies `down` before it is ever needed in production. A rollback
+      # that has never run is not a rollback.
+      - name: Verify migrations are reversible
+        run: |
+          cargo run -p __PROJECT_NAME__-migration -- down -n 1
+          cargo run -p __PROJECT_NAME__-migration -- up
+
+      - name: Test
+        run: cargo test --workspace
+
+  audit:
+    name: Dependency advisories
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      # Not `continue-on-error` — a known vulnerability should block the merge
+      # and be dealt with deliberately, not accumulate silently.
+      - name: Audit
+        run: cargo audit --deny warnings
+
+  docker:
+    name: Build image
+    runs-on: ubuntu-latest
+    # Only after the code is known good, so a lint failure does not also burn a
+    # multi-minute image build.
+    needs: [check, test]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: __PROJECT_NAME__:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # A built image that cannot start is not a passing build. This catches a
+      # missing runtime library — the classic distroless failure, invisible
+      # until something runs the binary.
+      - name: Smoke test the image
+        run: |
+          set -euo pipefail
+
+          docker network create __PROJECT_NAME__-ci
+          docker run -d --name pg --network __PROJECT_NAME__-ci \
+            -e POSTGRES_USER=__CRATE_NAME__ \
+            -e POSTGRES_PASSWORD=ci-only-not-a-secret \
+            -e POSTGRES_DB=__CRATE_NAME___test \
+            postgres:18-alpine
+
+          for _ in $(seq 1 30); do
+            docker exec pg pg_isready -U __CRATE_NAME__ -d __CRATE_NAME___test && break
+            sleep 2
+          done
+
+          export DB_URL=postgres://__CRATE_NAME__:ci-only-not-a-secret@pg:5432/__CRATE_NAME___test
+
+          # The migration binary must work from the image: it is what the
+          # deployment release command invokes.
+          docker run --rm --network __PROJECT_NAME__-ci \
+            --entrypoint /usr/local/bin/__PROJECT_NAME__-migrate \
+            -e DATABASE_URL="$DB_URL" __PROJECT_NAME__:ci up
+
+          docker run -d --name api --network __PROJECT_NAME__-ci -p 8080:8080 \
+            -e DATABASE_URL="$DB_URL" \
+            __PROJECT_NAME__:ci
+
+          for _ in $(seq 1 30); do
+            if curl -sf http://localhost:8080/health > /dev/null; then break; fi
+            sleep 2
+          done
+
+          echo "--- liveness ---"
+          curl -sf http://localhost:8080/health
+          echo "--- readiness ---"
+          curl -sf http://localhost:8080/health/ready
+
+          # Add your own domain-specific smoke assertions here once you have
+          # real endpoints — e.g. the equivalent of "signup issues a token" in
+          # notils-praman's own ci.yml. Liveness/readiness alone only proves
+          # the container starts and can reach Postgres.
+
+          echo "image smoke test passed"
+
+      - name: Container logs on failure
+        if: failure()
+        run: docker logs api || true

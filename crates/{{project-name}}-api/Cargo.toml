@@ -1,0 +1,27 @@
+[package]
+name = "{{project-name}}-api"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+{{project-name}}-core.workspace = true
+{{project-name}}-db.workspace = true
+{{project-name}}-types.workspace = true
+
+axum.workspace = true
+dotenvy.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+serde_path_to_error.workspace = true
+validator.workspace = true
+utoipa.workspace = true
+utoipa-axum.workspace = true
+utoipa-swagger-ui.workspace = true
