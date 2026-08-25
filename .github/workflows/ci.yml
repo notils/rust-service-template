@@ -9,8 +9,8 @@ on:
 # A new push supersedes an in-flight run on the same ref. Saves runner minutes
 # without ever cancelling a run on a protected branch mid-merge.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: {% raw %}${{ github.workflow }}-${{ github.ref }}{% endraw %}
+  cancel-in-progress: {% raw %}${{ github.ref != 'refs/heads/main' }}{% endraw %}
 
 env:
   CARGO_TERM_COLOR: always
@@ -42,15 +42,15 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
-      # __PROJECT_NAME__-core has no I/O dependencies, so its tests need no
+      # {{project-name}}-core has no I/O dependencies, so its tests need no
       # services. Running them separately means a domain-logic regression is
       # reported without waiting for Postgres to spin up.
       - name: Unit tests (no database)
-        run: cargo test -p __PROJECT_NAME__-core -p __PROJECT_NAME__-types
+        run: cargo test -p {{project-name}}-core -p {{project-name}}-types
 
   # ── Enforces the architectural rule rather than trusting it ───────────────
   no-io-in-core:
-    name: __PROJECT_NAME__-core has no I/O dependencies
+    name: {{project-name}}-core has no I/O dependencies
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -60,23 +60,23 @@ jobs:
       # docs/architecture.md forbids sea-orm, reqwest, and tokio in the core
       # crate. Comments do not enforce that; this does. The rule is what keeps
       # domain logic testable without fixtures.
-      - name: Assert no I/O crates reach __PROJECT_NAME__-core
+      - name: Assert no I/O crates reach {{project-name}}-core
         run: |
-          tree=$(cargo tree -p __PROJECT_NAME__-core -e normal)
+          tree=$(cargo tree -p {{project-name}}-core -e normal)
           echo "$tree"
           for crate in sea-orm reqwest hyper axum sqlx; do
             if echo "$tree" | grep -qE "^[^a-z]*${crate} v"; then
-              echo "::error::__PROJECT_NAME__-core must not depend on ${crate}"
+              echo "::error::{{project-name}}-core must not depend on ${crate}"
               exit 1
             fi
           done
           # tokio needs an anchored match: `tokio` appears inside names like
           # `tokio-util`, which are not the runtime itself.
           if echo "$tree" | grep -qE "^[^a-z]*tokio v"; then
-            echo "::error::__PROJECT_NAME__-core must not depend on tokio"
+            echo "::error::{{project-name}}-core must not depend on tokio"
             exit 1
           fi
-          echo "__PROJECT_NAME__-core is I/O-free"
+          echo "{{project-name}}-core is I/O-free"
 
   test:
     name: Full test suite
@@ -85,17 +85,17 @@ jobs:
       postgres:
         image: postgres:18-alpine
         env:
-          POSTGRES_USER: __CRATE_NAME__
+          POSTGRES_USER: {{crate_name}}
           POSTGRES_PASSWORD: ci-only-not-a-secret
-          POSTGRES_DB: __CRATE_NAME___test
+          POSTGRES_DB: {{crate_name}}_test
         ports: ['5432:5432']
         options: >-
-          --health-cmd "pg_isready -U __CRATE_NAME__ -d __CRATE_NAME___test"
+          --health-cmd "pg_isready -U {{crate_name}} -d {{crate_name}}_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgres://__CRATE_NAME__:ci-only-not-a-secret@localhost:5432/__CRATE_NAME___test
+      DATABASE_URL: postgres://{{crate_name}}:ci-only-not-a-secret@localhost:5432/{{crate_name}}_test
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -104,14 +104,14 @@ jobs:
       # Proves migrations apply to an empty database — the thing that breaks a
       # deploy, and which testing against a long-lived dev database hides.
       - name: Apply migrations
-        run: cargo run -p __PROJECT_NAME__-migration -- up
+        run: cargo run -p {{project-name}}-migration -- up
 
       # 🔴 Verifies `down` before it is ever needed in production. A rollback
       # that has never run is not a rollback.
       - name: Verify migrations are reversible
         run: |
-          cargo run -p __PROJECT_NAME__-migration -- down -n 1
-          cargo run -p __PROJECT_NAME__-migration -- up
+          cargo run -p {{project-name}}-migration -- down -n 1
+          cargo run -p {{project-name}}-migration -- up
 
       - name: Test
         run: cargo test --workspace
@@ -149,7 +149,7 @@ jobs:
           context: .
           push: false
           load: true
-          tags: __PROJECT_NAME__:ci
+          tags: {{project-name}}:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -160,29 +160,29 @@ jobs:
         run: |
           set -euo pipefail
 
-          docker network create __PROJECT_NAME__-ci
-          docker run -d --name pg --network __PROJECT_NAME__-ci \
-            -e POSTGRES_USER=__CRATE_NAME__ \
+          docker network create {{project-name}}-ci
+          docker run -d --name pg --network {{project-name}}-ci \
+            -e POSTGRES_USER={{crate_name}} \
             -e POSTGRES_PASSWORD=ci-only-not-a-secret \
-            -e POSTGRES_DB=__CRATE_NAME___test \
+            -e POSTGRES_DB={{crate_name}}_test \
             postgres:18-alpine
 
           for _ in $(seq 1 30); do
-            docker exec pg pg_isready -U __CRATE_NAME__ -d __CRATE_NAME___test && break
+            docker exec pg pg_isready -U {{crate_name}} -d {{crate_name}}_test && break
             sleep 2
           done
 
-          export DB_URL=postgres://__CRATE_NAME__:ci-only-not-a-secret@pg:5432/__CRATE_NAME___test
+          export DB_URL=postgres://{{crate_name}}:ci-only-not-a-secret@pg:5432/{{crate_name}}_test
 
           # The migration binary must work from the image: it is what the
           # deployment release command invokes.
-          docker run --rm --network __PROJECT_NAME__-ci \
-            --entrypoint /usr/local/bin/__PROJECT_NAME__-migrate \
-            -e DATABASE_URL="$DB_URL" __PROJECT_NAME__:ci up
+          docker run --rm --network {{project-name}}-ci \
+            --entrypoint /usr/local/bin/{{project-name}}-migrate \
+            -e DATABASE_URL="$DB_URL" {{project-name}}:ci up
 
-          docker run -d --name api --network __PROJECT_NAME__-ci -p 8080:8080 \
+          docker run -d --name api --network {{project-name}}-ci -p 8080:8080 \
             -e DATABASE_URL="$DB_URL" \
-            __PROJECT_NAME__:ci
+            {{project-name}}:ci
 
           for _ in $(seq 1 30); do
             if curl -sf http://localhost:8080/health > /dev/null; then break; fi

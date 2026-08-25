@@ -2,6 +2,35 @@
 
 > Generated from [notils/rust-service-template](https://github.com/notils/rust-service-template) — a Rust/axum/Postgres/Render service skeleton, extracted from `notils-praman`.
 
+## Generating a new service from this template
+
+Install `cargo-generate` once (needs a Rust toolchain — `rustup` installs one):
+
+```bash
+cargo install cargo-generate
+```
+
+Then generate. Pass the **short service name** (matching the `praman`/`rentdera` convention — this becomes the crate prefix: `<name>-types`, `<name>-core`, `<name>-db`, `<name>-migration`, `<name>-api`), not the eventual repo name — `myservice` below is a placeholder, substitute your own:
+
+```bash
+cargo generate --git notils/rust-service-template --name myservice
+```
+
+`cargo-generate` writes the output into a folder named after `--name` (`myservice/` here). Rename it to match the repo-naming convention before pushing:
+
+```bash
+mv myservice myservice-api
+cd myservice-api
+```
+
+`cargo-generate` already ran `git init` for you (no commits yet). Do the one required manual step (see [Quick start](#quick-start) below for why), then commit and push:
+
+```bash
+cargo fmt --all
+git add -A && git commit -m "Initial scaffold from notils/rust-service-template"
+gh repo create notils/myservice-api --private --source=. --push
+```
+
 ## Documentation
 
 | Doc | What it answers |

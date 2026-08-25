@@ -4,13 +4,18 @@
 [template]
 cargo_generate_version = ">=0.20.0"
 
-# GitHub Actions' own `${{ }}` expression syntax collides with Liquid's `{{ }}`
-# templating syntax — cargo-generate would try to substitute `${{ github.sha }}`
-# as if it were a placeholder and corrupt the workflow file. Excluding these
-# from Liquid processing and fixing up their handful of real substitutions
-# (project/crate name) via the post hook below sidesteps the collision
-# entirely, rather than wrapping every Actions expression in `{% raw %}`.
-exclude = [".github/workflows/*.yml"]
+# release.yml needs zero project/crate name substitution (it derives
+# everything from `github.repository`), so it's simplest to skip Liquid
+# entirely rather than wrap its many `${{ }}` GitHub Actions expressions in
+# `{% raw %}`. ci.yml does need substitution, so it isn't excluded — its
+# handful of `${{ }}` expressions are individually wrapped in `{% raw %}`
+# instead, so cargo-generate doesn't try to treat them as placeholders.
+#
+# hooks/post.rhai is excluded too — Rhai scripts are never meant to go
+# through Liquid substitution (cargo-generate itself errors on it: "invalid
+# syntax"), and this one needs none anyway: it reads placeholder values at
+# hook-execution time via variable::get(), not via text substitution.
+exclude = [".github/workflows/release.yml", "hooks/post.rhai"]
 
 [hooks]
 post = ["hooks/post.rhai"]
