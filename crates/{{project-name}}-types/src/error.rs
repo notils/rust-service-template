@@ -84,7 +84,11 @@ impl FieldError {
         code: impl Into<String>,
         message: impl Into<String>,
     ) -> Self {
-        Self { field: field.into(), code: code.into(), message: message.into() }
+        Self {
+            field: field.into(),
+            code: code.into(),
+            message: message.into(),
+        }
     }
 }
 
@@ -114,7 +118,10 @@ impl Error {
 
     /// Builds a `validation_failed` error carrying per-field detail.
     pub fn validation(field_errors: Vec<FieldError>) -> Self {
-        Self { field_errors, ..Self::new(ErrorCode::ValidationFailed) }
+        Self {
+            field_errors,
+            ..Self::new(ErrorCode::ValidationFailed)
+        }
     }
 
     /// Overrides the human-readable message. Never put internal detail here —
@@ -201,7 +208,11 @@ fn flatten_into(prefix: &str, errors: &validator::ValidationErrors, out: &mut Ve
     use validator::ValidationErrorsKind;
 
     for (field, kind) in errors.errors() {
-        let path = if prefix.is_empty() { field.to_string() } else { format!("{prefix}.{field}") };
+        let path = if prefix.is_empty() {
+            field.to_string()
+        } else {
+            format!("{prefix}.{field}")
+        };
 
         match kind {
             ValidationErrorsKind::Field(field_errors) => {
@@ -212,7 +223,11 @@ fn flatten_into(prefix: &str, errors: &validator::ValidationErrors, out: &mut Ve
                         .map(|m| m.to_string())
                         .unwrap_or_else(|| default_field_message(&error.code, &path));
 
-                    out.push(FieldError::new(path.clone(), error.code.to_string(), message));
+                    out.push(FieldError::new(
+                        path.clone(),
+                        error.code.to_string(),
+                        message,
+                    ));
                 }
             }
             ValidationErrorsKind::Struct(nested) => flatten_into(&path, nested, out),
@@ -258,7 +273,10 @@ mod tests {
             .with_message("connection to 10.0.0.5 failed");
 
         let envelope = err.to_envelope("req_1");
-        assert_eq!(envelope.error.message, ErrorCode::Internal.default_message());
+        assert_eq!(
+            envelope.error.message,
+            ErrorCode::Internal.default_message()
+        );
         assert!(!envelope.error.message.contains("hunter2"));
         assert!(!envelope.error.message.contains("10.0.0.5"));
     }
@@ -316,11 +334,17 @@ mod tests {
             password: String,
         }
 
-        let sample = Sample { email: "nope".to_owned(), password: "short".to_owned() };
+        let sample = Sample {
+            email: "nope".to_owned(),
+            password: "short".to_owned(),
+        };
         let errors = sample.validate().unwrap_err();
 
         // Sorted by field, so the same bad request always yields the same body.
-        let fields: Vec<_> = field_errors_from(&errors).into_iter().map(|e| e.field).collect();
+        let fields: Vec<_> = field_errors_from(&errors)
+            .into_iter()
+            .map(|e| e.field)
+            .collect();
         assert_eq!(fields, ["email", "password"]);
     }
 }

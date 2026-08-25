@@ -7,7 +7,7 @@
 
 use axum::{
     extract::{FromRequestParts, Request},
-    http::{HeaderMap, header::HeaderName, request::Parts},
+    http::{header::HeaderName, request::Parts, HeaderMap},
     middleware::Next,
     response::Response,
 };
@@ -40,7 +40,11 @@ impl std::fmt::Display for RequestId {
 /// The single place the header is parsed, so the extractor and the middleware
 /// below cannot drift apart on the header name or the fallback.
 fn from_headers(headers: &HeaderMap) -> String {
-    headers.get(X_REQUEST_ID).and_then(|value| value.to_str().ok()).unwrap_or(UNKNOWN).to_owned()
+    headers
+        .get(X_REQUEST_ID)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or(UNKNOWN)
+        .to_owned()
 }
 
 /// Lets a handler take `RequestId` as an argument, for correlating its own logs.
@@ -88,7 +92,10 @@ mod tests {
 
         let mut headers = HeaderMap::new();
         // Non-UTF-8 bytes are unreadable as a string.
-        headers.insert(X_REQUEST_ID, axum::http::HeaderValue::from_bytes(&[0xff]).unwrap());
+        headers.insert(
+            X_REQUEST_ID,
+            axum::http::HeaderValue::from_bytes(&[0xff]).unwrap(),
+        );
         assert_eq!(from_headers(&headers), UNKNOWN);
     }
 }

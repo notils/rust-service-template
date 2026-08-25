@@ -1,6 +1,6 @@
 //! Structured logging.
 
-use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 /// Installs the global subscriber.
 ///
@@ -9,15 +9,18 @@ use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberI
 ///
 /// Call once, before anything worth logging happens.
 pub fn init() {
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info,{{crate_name}}_api=debug,{{crate_name}}_db=debug"));
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        EnvFilter::new("info,{{crate_name}}_api=debug,{{crate_name}}_db=debug")
+    });
 
     let json = std::env::var("LOG_FORMAT").is_ok_and(|format| format.eq_ignore_ascii_case("json"));
 
     let registry = tracing_subscriber::registry().with(filter);
 
     if json {
-        registry.with(fmt::layer().json().flatten_event(true)).init();
+        registry
+            .with(fmt::layer().json().flatten_event(true))
+            .init();
     } else {
         registry.with(fmt::layer().compact()).init();
     }

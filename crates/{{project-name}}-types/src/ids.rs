@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// Declares a UUID newtype with the same small surface for each id kind.
+#[macro_export]
 macro_rules! uuid_newtype {
     ($(#[$meta:meta])* $name:ident) => {
         $(#[$meta])*
@@ -84,6 +85,7 @@ pub use uuid_newtype;
 /// pub struct ProviderId(String);
 /// string_newtype!(ProviderId);
 /// ```
+#[macro_export]
 macro_rules! string_newtype {
     ($name:ident) => {
         impl $name {

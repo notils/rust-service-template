@@ -5,7 +5,7 @@
 //! the orchestrator kill and restart otherwise-healthy instances. Readiness
 //! answers "can this instance serve traffic", which does require the database.
 
-use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
+use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use serde::Serialize;
 use utoipa::ToSchema;
 
@@ -31,7 +31,10 @@ pub struct Readiness {
     responses((status = 200, description = "The process is alive.", body = Health)),
 )]
 pub async fn health() -> Json<Health> {
-    Json(Health { status: "ok", version: env!("CARGO_PKG_VERSION") })
+    Json(Health {
+        status: "ok",
+        version: env!("CARGO_PKG_VERSION"),
+    })
 }
 
 /// `GET /health/ready` — readiness, including a database round-trip.
@@ -49,12 +52,21 @@ pub async fn health() -> Json<Health> {
 )]
 pub async fn readiness(State(state): State<AppState>) -> impl IntoResponse {
     match state.db().ping().await {
-        Ok(()) => (StatusCode::OK, Json(Readiness { status: "ok", database: "up" })),
+        Ok(()) => (
+            StatusCode::OK,
+            Json(Readiness {
+                status: "ok",
+                database: "up",
+            }),
+        ),
         Err(err) => {
             tracing::warn!(error = ?err, "readiness probe failed");
             (
                 StatusCode::SERVICE_UNAVAILABLE,
-                Json(Readiness { status: "degraded", database: "down" }),
+                Json(Readiness {
+                    status: "degraded",
+                    database: "down",
+                }),
             )
         }
     }

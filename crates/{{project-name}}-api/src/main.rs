@@ -82,8 +82,11 @@ async fn probe(url: &str) -> Result<(), Box<dyn std::error::Error>> {
     stream.write_all(request.as_bytes()).await?;
 
     let mut response = Vec::new();
-    tokio::time::timeout(std::time::Duration::from_secs(2), stream.read_to_end(&mut response))
-        .await??;
+    tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        stream.read_to_end(&mut response),
+    )
+    .await??;
 
     let head = String::from_utf8_lossy(&response);
     let status = head.lines().next().unwrap_or_default();

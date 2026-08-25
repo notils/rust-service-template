@@ -40,11 +40,13 @@ where
         // Taken as raw bytes so deserialization can run through
         // `serde_path_to_error`, which reports *which* field failed. Axum's
         // `Json<T>` discards that path and yields only a prose message.
-        let bytes = axum::body::Bytes::from_request(request, state).await.map_err(|_| {
-            ApiError::from(
-                Error::new(ErrorCode::InvalidRequest).with_message("Could not read the body."),
-            )
-        })?;
+        let bytes = axum::body::Bytes::from_request(request, state)
+            .await
+            .map_err(|_| {
+                ApiError::from(
+                    Error::new(ErrorCode::InvalidRequest).with_message("Could not read the body."),
+                )
+            })?;
 
         let mut deserializer = serde_json::Deserializer::from_slice(&bytes);
 
@@ -64,13 +66,19 @@ where
 /// Accepts `application/json` and any `+json` suffix type, with or without
 /// parameters (`; charset=utf-8`), matching what `axum::Json` allows.
 fn is_json_content_type(headers: &axum::http::HeaderMap) -> bool {
-    let Some(value) =
-        headers.get(axum::http::header::CONTENT_TYPE).and_then(|value| value.to_str().ok())
+    let Some(value) = headers
+        .get(axum::http::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
     else {
         return false;
     };
 
-    let essence = value.split(';').next().unwrap_or_default().trim().to_ascii_lowercase();
+    let essence = value
+        .split(';')
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase();
 
     essence == "application/json" || essence.ends_with("+json")
 }
@@ -107,10 +115,18 @@ fn field_path(err: &serde_path_to_error::Error<serde_json::Error>) -> String {
     let path = err.path().to_string();
 
     if let Some(name) = missing_field_name(&err.to_string()) {
-        return if path.is_empty() || path == "." { name } else { format!("{path}.{name}") };
+        return if path.is_empty() || path == "." {
+            name
+        } else {
+            format!("{path}.{name}")
+        };
     }
 
-    if path.is_empty() || path == "." { "body".to_owned() } else { path }
+    if path.is_empty() || path == "." {
+        "body".to_owned()
+    } else {
+        path
+    }
 }
 
 /// Maps a serde message onto a stable `code` and a safe message.
@@ -209,8 +225,14 @@ mod tests {
         let err = parse(r#"{"email":"a@b.com","password":12345,"port":null}"#).unwrap_err();
         let (_, message) = classify(&err.to_string());
 
-        assert!(err.to_string().contains("12345"), "serde does include the value");
-        assert!(!message.contains("12345"), "but the client-facing message must not");
+        assert!(
+            err.to_string().contains("12345"),
+            "serde does include the value"
+        );
+        assert!(
+            !message.contains("12345"),
+            "but the client-facing message must not"
+        );
     }
 
     #[test]

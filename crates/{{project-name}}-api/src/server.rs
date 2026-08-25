@@ -1,9 +1,9 @@
 //! Server assembly: middleware, binding, and graceful shutdown.
 
-use axum::{Router, http::StatusCode};
+use axum::{http::StatusCode, Router};
 use tokio::net::TcpListener;
 use tower_http::{
-    ServiceBuilderExt, request_id::MakeRequestUuid, timeout::TimeoutLayer, trace::TraceLayer,
+    request_id::MakeRequestUuid, timeout::TimeoutLayer, trace::TraceLayer, ServiceBuilderExt,
 };
 
 use crate::{config::Config, routes, state::AppState};
@@ -19,7 +19,10 @@ pub fn build(state: AppState, config: &Config) -> Router {
         .set_x_request_id(MakeRequestUuid)
         .layer(TraceLayer::new_for_http())
         // A request that outlives this is a stuck dependency, not slow work.
-        .layer(TimeoutLayer::with_status_code(StatusCode::GATEWAY_TIMEOUT, config.request_timeout))
+        .layer(TimeoutLayer::with_status_code(
+            StatusCode::GATEWAY_TIMEOUT,
+            config.request_timeout,
+        ))
         .propagate_x_request_id();
 
     routes::router(state)

@@ -34,9 +34,14 @@ impl IntoResponse for ApiError {
         let status =
             StatusCode::from_u16(self.inner.status()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
 
-        let mut response =
-            (status, Json(self.inner.to_envelope(crate::request_id::UNKNOWN))).into_response();
-        response.extensions_mut().insert(DeferredError(std::sync::Arc::new(self.inner)));
+        let mut response = (
+            status,
+            Json(self.inner.to_envelope(crate::request_id::UNKNOWN)),
+        )
+            .into_response();
+        response
+            .extensions_mut()
+            .insert(DeferredError(std::sync::Arc::new(self.inner)));
 
         response
     }
@@ -103,7 +108,11 @@ mod tests {
             (ErrorCode::Internal, 500),
         ] {
             let response = ApiError::from(Error::new(code)).into_response();
-            assert_eq!(response.status().as_u16(), expected, "wrong status for {code:?}");
+            assert_eq!(
+                response.status().as_u16(),
+                expected,
+                "wrong status for {code:?}"
+            );
         }
     }
 }
