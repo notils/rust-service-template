@@ -3,61 +3,53 @@
 | | |
 |---|---|
 | **Status** | Active |
-| **Platform** | Render (ported from notils-praman's own deployment setup — swap if you deploy elsewhere) |
-| **Config** | [`render.yaml`](../render.yaml) |
-| **Image** | `ghcr.io/REPLACE_WITH_ORG/{{project-name}}` |
+| **Platform** | Render, connected directly to this GitHub repo — no Blueprint, no separate image registry (ported from `notils-praman`'s own deployment setup — swap if you deploy elsewhere) |
+| **Build** | Render builds [`Dockerfile`](../Dockerfile) itself on every push to the tracked branch |
+| **Config** | Set in the Render dashboard (service settings + environment variables) — not version-controlled |
 
 This is the step-by-step runbook.
+
+⚠️ **If you generated this project before this doc was rewritten**, you may have a `render.yaml` and a `release.yml` workflow publishing to GHCR. Both are gone from the template — `notils-praman` and `rentdera-api` independently arrived at the same conclusion and dropped both: for a one-or-two-service setup, Render's own Git-connected build does the same job with less to maintain. Delete both files if you still have them; `ci.yml` (format/lint/test) is untouched either way.
 
 ---
 
 ## 0. Platform choice
 
-`render.yaml` ships with `plan: free` on both services and production commented out — the same provisional, cost-conscious starting point notils-praman used. Revisit both (the plan tier, and Render itself) once real traffic depends on this service, with real cost/traffic numbers rather than guesses.
+**Provisional, cost-conscious starting point** — the same one `notils-praman` used. Both services should run on `plan: free` to start: free instances spin down after ~15 minutes idle (a cold-start delay on the first request after), which is fine for validating the pipeline and unacceptable once real users depend on it. `plan: free` is also what avoids Render's payment-info prompt when creating a service.
 
-`plan: free` also avoids Render's payment-info requirement for Blueprint services (only paid instance types trigger it).
+Revisit the plan (and Render itself, vs. self-hosting) once real traffic depends on this service, with real cost/traffic numbers instead of guesses.
 
 ---
 
 ## 1. Environments
 
-| | Domain | Image tag | Status |
+Two separate Render Web Services, each its own connected branch, its own env vars, its own database — never shared.
+
+| | Domain | Deploys from | Status |
 |---|---|---|---|
-| Staging | `REPLACE_WITH_STAGING_DOMAIN` | `:dev` | Active |
-| Production | `REPLACE_WITH_PRODUCTION_DOMAIN` | `:latest` | Commented out in `render.yaml` until there's a `main` branch and a real reason to deploy it |
+| Staging | `REPLACE_WITH_STAGING_DOMAIN` | pushes to `stage` | **Active** |
+| Production | `REPLACE_WITH_PRODUCTION_DOMAIN` | pushes to `main` | Create when there's a real reason to — see below |
 
-### 1a. Pulling a private GHCR image
+`dev` is the integration branch everything lands on first — it deploys nowhere on its own. The flow is `dev` → PR into `stage` (deploys staging) → PR into `main` (deploys production), never a direct push from `dev` to either deploy branch. `ci.yml` runs on all three (`main`/`stage`/`dev`) for exactly this reason — a PR into a branch `ci.yml` doesn't list gets no check of its own, only whatever it inherited from its head branch's last push.
 
-If your repo is private, its GHCR package is private too, and Render needs a credential to pull it:
-
-1. Generate a GitHub PAT (**classic**, not fine-grained — GHCR container-package reads are unreliable with fine-grained tokens even when scopes look right) with the `read:packages` scope.
-2. Render Dashboard → **Workspace Settings → Credentials** → add a registry credential: registry `ghcr.io`, your GitHub username, the PAT as the password, and a **Name** you choose.
-3. `image.creds` in `render.yaml` is an object, not a plain string:
-   ```yaml
-   image:
-     creds:
-       fromRegistryCreds:
-         name: the-name-you-chose-in-step-2
-   ```
-   Both `image.creds` entries reference this — update both if you ever recreate the credential under a different name.
-
-⚠️ Do this **before** applying the Blueprint, or the service fails to pull its image with a misleading "not found"/"could not be fetched" (Render can't distinguish a missing image from one it isn't authorized to see).
+🔴 **Once production exists, each environment must have its own signing key(s) and its own `DATABASE_URL`.** A staging-issued credential that verifies in production is a complete authentication bypass — never copy secrets across environments.
 
 ---
 
-## 2. First-time setup
+## 2. First-time setup (per environment)
 
-1. Create the registry credential (§1a) if the repo is private.
-2. Render Dashboard → **New → Blueprint** → point at this repo → it reads [`render.yaml`](../render.yaml) and creates the staging service.
-3. Fill in `DATABASE_URL` for the staging service (`sync: false` in the blueprint, so it's never in git) — a hosted Postgres (Neon, Render's own managed Postgres, etc.), not your local `docker compose` instance, which Render's containers cannot reach.
-4. **Apply migrations manually first** (§3) — `plan: free` doesn't run `preDeployCommand`, so the database has no schema yet. Do this before the first deploy, or the app crash-loops trying to connect to an unmigrated database.
-5. Deploy, then verify (§5).
+1. Render Dashboard → **New → Web Service** → connect this GitHub repo (its GitHub App handles private-repo authorization, no PAT needed). Pick the branch to track (`stage` for staging, `main` for production — a separate service each). Render detects `Dockerfile` automatically.
+2. **Region:** pick whatever's closest to your users, matching wherever this service's own database ends up.
+3. **Health check path:** `/health` (liveness only — never `/health/ready`; a readiness probe here would let a brief database blip restart otherwise-healthy instances).
+4. **Environment variables** (dashboard → this service → Environment — never in git): `DATABASE_URL`, `PORT`, `HOST=0.0.0.0`, `LOG_FORMAT=json`, `RUST_LOG`, plus whatever this service's own `config.rs` requires. Any signing key or secret goes here too, per-environment, never shared.
+5. **Apply migrations manually first** (§3) — the database has no schema yet. Do this before the first deploy, or the app crash-loops trying to connect to an unmigrated database.
+6. Save — Render builds and deploys automatically. Verify (§5).
 
 ---
 
 ## 3. Migrations on the free tier
 
-🔴 **`render.yaml` deliberately has no `preDeployCommand`** — Render does not support it on `plan: free`, only on paid tiers. Migrations do **not** run automatically on deploy, and must never run at application startup either (every instance would race the others). Run them manually, from your machine, pointed at the target database:
+Migrations do **not** run automatically on deploy — Render's `plan: free` doesn't support a pre-deploy hook on *any* deploy method, and migrations must never run at application startup either (every instance would race the others). Run them manually, from your machine, pointed at the target database:
 
 ```bash
 DATABASE_URL="<the same connection string set in Render>" \
@@ -65,26 +57,20 @@ DATABASE_URL="<the same connection string set in Render>" \
 ```
 
 - Run this against **staging's** database before deploying to staging, and against **production's** before deploying to production.
-- Run it *before* the deploy that needs the new schema, not after.
-- `cargo run -p {{project-name}}-migration -- status` shows what's pending without applying anything.
+- Run it *before* the push/merge that needs the new schema lands, not after — a deploy that starts serving against a stale schema is exactly the race a pre-deploy hook exists to prevent.
+- `cargo run -p {{project-name}}-migration -- status` shows what's pending against a given `DATABASE_URL` without applying anything.
 
-**Once this moves off `plan: free`:** add `preDeployCommand: /usr/local/bin/{{project-name}}-migrate up` to the service(s) in `render.yaml` and this step goes away.
+**Once this moves off `plan: free`:** Render's paid tiers support a pre-deploy command directly in the dashboard. Point it at `{{project-name}}-migrate up` and this step goes away.
 
 ---
 
 ## 4. Routine deploys
 
-🔴 **Merging to `dev` builds a new image — it does not deploy it.** Render's auto-deploy only applies to services built from a git repo; an image-based (`runtime: image`) service like this one is [not automatically redeployed when its floating tag gets a new digest](https://render.com/docs/deploys) — you have to trigger it.
+Merge into the tracked branch (`stage` or `main`) — in practice always via a PR, never a direct push, so `ci.yml` runs against the actual merge before it lands. Render builds `Dockerfile` off that branch and deploys automatically — no separate deploy build, no manual "deploy latest commit" click, no drift between what's merged and what's running.
 
-```
-push to dev ──► CI ──► release.yml builds & pushes ghcr.io/.../{{project-name}}:dev ──► (new digest sits in GHCR, unused)
-                                                                                             │
-                                                                 a manual step is required ──┘
-```
+⚠️ **If your change includes a migration, run §3 *before* the merge lands** — getting the order backwards (deploy before migrate) fails the same way either direction: running code expecting columns the database doesn't have yet, or the reverse.
 
-**After merging, manually deploy:** Render dashboard → the staging service → **Manual Deploy → Deploy latest commit** (or a deploy hook called from `release.yml`, which is worth wiring up once this bites someone once).
-
-⚠️ **On `plan: free`, deploying also doesn't apply migrations** — run §3 *before* triggering the deploy if your change includes one.
+The flow is always `dev` → `stage` → `main`, never `dev` straight to `main` — staging is what a `main`-bound PR gets validated against before production sees it.
 
 ---
 
@@ -95,22 +81,18 @@ curl -sf https://REPLACE_WITH_STAGING_DOMAIN/health          # liveness — proc
 curl -sf https://REPLACE_WITH_STAGING_DOMAIN/health/ready     # readiness — includes a DB round-trip
 ```
 
-If `/health/ready` returns `503`: on `plan: free`, this usually means you skipped §3 and the schema doesn't exist yet.
+If `/health/ready` returns `503`: on `plan: free` this usually means you skipped §3 and the schema doesn't exist yet.
 
 ---
 
 ## 6. Rolling back
 
-`render.yaml` pins each service to a floating tag (`:latest` / `:dev`), so a rollback means pointing the service at a specific `:sha-<digest>` tag instead:
+Render's Git-connected deploys keep a deploy history per service — dashboard → the service → **Events**/**Deploys** → pick a prior successful deploy → **Rollback to this deploy**. No digest pinning needed, unlike the old image-based setup: Render already has every previous build.
 
-1. Find the digest of the last known-good build (GHCR package page, or a prior Actions run's `docker` job output).
-2. In the Render dashboard, temporarily override the service's image to `ghcr.io/.../{{project-name}}:sha-<digest>` and deploy.
-3. Fix forward on `dev`/`main`; remove the override once the fix is out.
-
-This is why every build gets an immutable `:sha-` tag — a rollback names a digest, not a guess about what `latest` used to be.
+Fix forward on `dev`/`stage`/`main` as usual; the rollback just buys time while that happens.
 
 ---
 
 ## 7. Known advisories
 
-`.cargo/audit.toml` ships empty — nothing has needed an ignore yet. When one does, document it the way notils-praman does: reason the vulnerable path is unreachable, plus a removal condition, per advisory ID.
+`.cargo/audit.toml` ships empty — nothing has needed an ignore yet. When one does, document it the way `notils-praman` does: reason the vulnerable path is unreachable, plus a removal condition, per advisory ID.

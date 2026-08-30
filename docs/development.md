@@ -182,11 +182,11 @@ Both binaries ship: `{{project-name}}-api` and `{{project-name}}-migrate`.
 
 ### Migrations on deploy
 
-`render.yaml` has no `preDeployCommand` (Render's free tier doesn't support it) — see [docs/deployment.md § Migrations on the free tier](deployment.md) for the manual workflow this needs until that changes.
+Render's free tier doesn't support a pre-deploy hook on any deploy method — see [docs/deployment.md § Migrations on the free tier](deployment.md) for the manual workflow this needs until that changes.
 
 ### CI
 
-[`ci.yml`](../.github/workflows/ci.yml) runs on every push to `main`/`dev`:
+[`ci.yml`](../.github/workflows/ci.yml) runs on every push to `main`/`stage`/`dev` (and PRs into any of them — a PR into a branch this doesn't list gets no check of its own):
 
 | Job | What it guards |
 |---|---|
@@ -196,4 +196,4 @@ Both binaries ship: `{{project-name}}-api` and `{{project-name}}-migrate`.
 | `audit` | `cargo audit --deny warnings` |
 | `docker` | Builds the image, starts it, and asserts `/health`/`/health/ready` — add your own domain smoke assertions here once you have real endpoints |
 
-[`release.yml`](../.github/workflows/release.yml) publishes to GHCR — `dev` → `:dev`, `main` → `:latest`, tags → `:vX.Y.Z`, and every build gets an immutable `:sha-` tag so a rollback names a digest rather than guessing what `latest` was.
+Deploys happen separately, directly from Render's own Git-connected build — merging into `stage`/`main` triggers it, no publish step in this repo. See [docs/deployment.md](deployment.md).

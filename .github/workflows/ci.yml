@@ -2,15 +2,19 @@ name: CI
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main, stage, dev]
   pull_request:
-    branches: [main, dev]
+    branches: [main, stage, dev]
 
 # A new push supersedes an in-flight run on the same ref. Saves runner minutes
-# without ever cancelling a run on a protected branch mid-merge.
+# without ever cancelling a run on a deploy branch mid-merge — main and stage
+# both ship straight to a live Render service on push (docs/deployment.md), so
+# neither gets its validation run cut short by a following push the way a
+# fast-moving dev branch does. (Ported from notils-praman, which found this
+# the hard way: a PR into a branch not listed here gets no CI run at all.)
 concurrency:
   group: {% raw %}${{ github.workflow }}-${{ github.ref }}{% endraw %}
-  cancel-in-progress: {% raw %}${{ github.ref != 'refs/heads/main' }}{% endraw %}
+  cancel-in-progress: {% raw %}${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/stage' }}{% endraw %}
 
 env:
   CARGO_TERM_COLOR: always

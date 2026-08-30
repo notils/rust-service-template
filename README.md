@@ -71,5 +71,5 @@ Full setup: [docs/development.md](docs/development.md).
 This is a working starting point, not a finished service:
 
 - `crates/{{project-name}}-types`, `-core`, `-db`, `-migration`, `-api` are real, buildable, minimal skeletons — replace `{{project-name}}-core`'s `placeholder()` and `{{project-name}}-migration`'s example migration with your actual domain logic and schema.
-- The Dockerfile, CI (`ci.yml`/`release.yml`), and `render.yaml` are ready to use as-is — only names need to already be right (cargo-generate did that).
+- The Dockerfile and CI (`ci.yml`) are ready to use as-is — only names need to already be right (cargo-generate did that). Deployment is a Render Web Service connected directly to this repo (`docs/deployment.md`) — no `render.yaml`, no image registry, nothing else to generate.
 - `docs/architecture.md` is a skeleton with prompts, not filled-in content — write it as you make real decisions, the way `notils-praman`'s own copy shows.
