@@ -9,10 +9,21 @@ cargo_generate_version = ">=0.20.0"
 # syntax"), and this one needs none anyway: it reads placeholder values at
 # hook-execution time via variable::get(), not via text substitution.
 #
-# ci.yml is NOT excluded — its `${{ }}` GitHub Actions expressions are
-# individually wrapped in `{% raw %}` instead, so cargo-generate doesn't try
-# to treat them as placeholders.
-exclude = ["hooks/post.rhai"]
+# .github/workflows/release.yml is excluded for a different reason: it has
+# no `{{project-name}}`/`{{crate_name}}` placeholders at all — every `{{`/
+# `${{` in it is either a GitHub Actions expression or docker/metadata-
+# action's own `{{version}}` syntax, none of it meant for cargo-generate.
+# Liquid chokes on the unescaped `${{ }}` (cargo-generate < 0.24 aborts
+# generation entirely: "Substitution skipped, found invalid syntax"), so
+# excluding it outright is simpler and more honest than the `{% raw %}` dance
+# below — there's nothing here for cargo-generate to substitute anyway.
+#
+# ci.yml is NOT excluded, because unlike release.yml it genuinely mixes real
+# `{{project-name}}`/`{{crate_name}}` placeholders with `${{ }}` GitHub
+# Actions expressions — so its `${{ }}` lines are individually wrapped in
+# `{% raw %}` instead, letting the real placeholders elsewhere in the same
+# file still substitute.
+exclude = ["hooks/post.rhai", ".github/workflows/release.yml"]
 
 [hooks]
 post = ["hooks/post.rhai"]
